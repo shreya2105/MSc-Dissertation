@@ -18,52 +18,48 @@ setwd("/Users/shreyaagarwal/Documents/Code/Machine Learning/Dissertation/Capston
 ```
 
 ```{r}
-
 library(data.table)  
+
+#read all csv files from folder
 files <- list.files(pattern = ".csv")
 
-
-#csv <- lapply(files, read.csv)
-#result <- do.call(rbind, csv)
-
-#data = result
-
+#Combine all files into one file 'data'
 temp <- lapply(files, fread, sep=",")
 data <- rbindlist(temp, fill = TRUE)
 
-data[,uniqueN(text)] #unique rows in text column
-#colnames(data) #Columns in the data column
+write.csv(data, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/allcombineddata.csv")
+```
 
-data <- unique(data)
-#dim(data)
 
-data.1 <- data
-table(data.1$lang)
+Check for duplication in complete dataset (hindi/english tweets only) - 540,973
+```{r}
+#Unique rows
+data_unique <- unique(data)
 
-data.text.1 <- data.1 %>% distinct(text, .keep_all = TRUE)
-table(data.text.1$lang)
+data_unique_lang <- data_unique %>% filter(lang == "hi" | lang == "en" )
+data_unique_lang$created_at <- lubridate::as_date(data_unique_lang$created_at)
+table(data_unique_lang$created_at)
 
-data.text <- data.1 %>% distinct(text, .keep_all = TRUE) %>% filter(lang == "hi" | lang == "en" )
+#Check language breakup
+table(data_unique$lang)
+
+write.csv(data_unique_lang, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/unique_rows_hi_eng.csv")
+```
+
+Check for duplication in text columns - tweets - 231,910
+```{r}
+
+#Distinct text rows - including all languages
+data.text<- data_unique %>% distinct(text, .keep_all = TRUE)
+table(data.text$lang)
+
+#distinct text rows - including only Hindi and English tweets - 231,910 tweets
+data.text <- data.text %>% distinct(text, .keep_all = TRUE) %>% filter(lang == "hi" | lang == "en" )
 
 data.text$created_at <- lubridate::as_date(data.text$created_at)
 table(data.text$created_at)
 
-
-#head(data.text)
-```
-
-```{r}
-
-#table(data.text$lang) # Check number of tweets for each language
-write.csv(data.text, "/Users/shreyaagarwal/Documents/Code/Machine Learning/Dissertation/all_tweets.csv")
-data.text <- read.csv("/Users/shreyaagarwal/Documents/Code/Machine Learning/Dissertation/all_tweets.csv")
-
-hindi_tweets <- data.text %>% filter(lang == "hi")
-write.csv(hindi_tweets, "/Users/shreyaagarwal/Documents/Code/Machine Learning/Dissertation/hindi_tweets.csv")
-
-eng_tweets <- data.text %>% filter(lang == "en")
-write.csv(eng_tweets, "/Users/shreyaagarwal/Documents/Code/Machine Learning/Dissertation/english_tweets.csv")
-
+write.csv(data.text, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/unique_text_rows_hi_eng.csv")
 ```
 
 
