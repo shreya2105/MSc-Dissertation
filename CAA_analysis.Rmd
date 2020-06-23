@@ -1,0 +1,33 @@
+---
+title: "CAA_Analysis"
+author: "SA"
+date: "6/23/2020"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(data.table)
+```
+
+```{r}
+caa_dataset <- fread("/Users/shreyaagarwal/Google Drive/Dissertation/Data/unique_rows_hi_eng.csv")
+```
+
+Data Cleaning
+```{r}
+library(stringr)
+
+#Remove source_ bots from the main dataset
+caa_dataset <- caa_dataset %>% filter(!str_detect(source, "Bot"))
+
+#filter down to relevant columns
+caa_text <- caa_dataset %>% select("screen_name","text","hashtags", "source", "description", "lang")
+
+#add pro and anti CAA column
+caa_text <- caa_text %>% mutate("")
+
+table(caa_dataset$hashtags)
+
+```
+
