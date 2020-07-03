@@ -8,26 +8,272 @@ output: html_document
 ```{r}
 library(tidyverse)
 library(data.table)
+library(quanteda)
+library(stringr)
+library(lubridate)
+
 ```
 
 ```{r}
 caa_dataset <- fread("/Users/shreyaagarwal/Google Drive/Dissertation/Data/unique_rows_hi_eng.csv")
+
+#Remove source_ bots from the main dataset
+caa_dataset <- caa_dataset %>% filter(!str_detect(source, "...Bot"))
+```
+
+
+```{r}
+#Write the cleaned dataset to csv
+write_excel_csv(caa_dataset, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/unique_rows_hi_eng.csv")
 ```
 
 Data Cleaning
 ```{r}
-library(stringr)
 
-#Remove source_ bots from the main dataset
-caa_dataset <- caa_dataset %>% filter(!str_detect(source, "Bot"))
+caa_dataset <- fread("/Users/shreyaagarwal/Google Drive/Dissertation/Data/unique_rows_hi_eng.csv")
 
+caa_dataset <- caa_dataset[,-c(1,2)]
+
+colnames(caa_dataset)
 #filter down to relevant columns
-caa_text <- caa_dataset %>% select("screen_name","text","hashtags", "source", "description", "lang")
+caa_text <- caa_dataset %>% select("created_at","screen_name","text","hashtags", "source", "description", "lang")
+caa_text$created_at <- lubridate::as_date(caa_text$created_at)
 
+#hashtag table
+hashtags <- as.data.table(table(caa_dataset$hashtags))
+```
+
+Word lists for columns - hashtags, description, screen_name
+```{r}
+#Str_detect
+anti_caa <- c("WeReject_CAA_NPR_NRC", "IndiaAgainstCAA_NRC", "notocaa", "kagaj_nahi_dikhayenge", "Anti_CAA","शाहीनबाग_जीतेगा_मोदी_हारेगा","UNRejectsCAA","IndiaAgainstCAA","AmitShahIstifaDo","RejectCAA","IndiaAgainstCAA_NRC_NPR","ArrestKapilMishra","SCSTOBC_Against_Hate", "CrimesAgainstHumanity","HinduTerror")
+
+pro_caa <- c("CAA_NRC_support","SupportCAA" ,"supportCAA", "IndiaSupportsCAA_NRC", "Pro_CAA", "शाहीन_बाग_हारेगा_देश_जितेंगा","IAmIndianISupportCAA","IStandWithKapilMishra","SaveDelhiHindus","हिंदुओ_को_मारना_बंद_करो",
+"ISupportKapilMishra","हर_दिल_में_योगी","PatrioticIndiansSupportCAA","AntiHinduRI", "Anti CAA agitators killed", "Tahir_hussain_terrorist", "ISupportKapilMishra")
+
+neutral_hashtags <- c("DelhiRiots2020", "CAA", "ShaheenBagh", "CAA_NRC", "DelhiViolance", "Delhigenocide", "Jafrabad", "CitizenshipAmendmentBill", "ShaheenBaghProtests", "DelhiCAAClashes", "CAAProtests", "CAAProtest", "CitizenshipAmendmentAct", "DelhiBurning", "CitizenshipAmendmentBill2019", "CitizenshipAct", "caa", "shaheenbaghs","DelhiPolice", "Kashmir", "AmulyaLeona", "Karnataka", "Aligarh")
+
+n_hash <- ("DelhiRiots2020 | CAA | ShaheenBagh |CAA_NRC|DelhiViolance|Delhigenocide|Jafrabad|CitizenshipAmendmentBill|ShaheenBaghProtests|DelhiCAAClashes|CAAProtests|CAAProtest| CitizenshipAmendmentAct|DelhiBurning|CitizenshipAmendmentBill2019|CitizenshipAct|caa|shaheenbaghs")
+
+news_words <- ("Breaking news | latest news | independent news | Hindi News | digital news | news agency | leading news | online news | Kadak news | News Services | news follow | AJ+ is news |daily news | presenting news |news agency | Regional news | Asianetnews | international news |news channel| source on news| global news | news ticker | commentary news | Deccan Chronicle | Democracy Express | instant news | The Economic Times| Indian news | FinancialExpress | word in news | news website | news")
+```
+
+#Excluded Screen Names from news org tweets dataset
+```{r}
+ind_screen_name <- ("_cricketkeeda|AnOpenLetter001 |asadr3855|dailynewsteller|fakingnews|FarooqmoinMoin|ReporterAnkitG|asadr3855|Zebaism|PratibaRaman|pallavict|HighJoshPD|Diya_BJPLover|PeepingMoon|abhishekdey04|ashokhajeri|misrashutosh|SirajMumin|ArunKumar7997|mahuatar|Deepika81682230|Kanishka183|Yogendr89778547|brainy_indian|HEYRAM65860375|Hindinewsguru|mr_rebel_amir|real_hindu1|xxSachinx|vishnur_otn|vijaykjha|very_politickle|tmanipalj|ThrillingTalha|thodappakattai|THEPANIPURI|thechikku|tantry_b|SyedAliHassanK4|sumtweets08|SubhashDaga59|StillAliveRicha|SRIDHAR0520|shivkishore81|shinjinidb|SANJAYTRIKA|SaintMuneesh|Roshan575002|RishikaSadam|RishabhEIN|real_Deepipika|real_Deepika_|rankraiser|pakco_updates|pandithariojha|paromita0611|pinakaSharanga|Ppriyacee|prabodhmhalgi|pratikbTOI|PreetiV70305055|PyckerKollywood|radhikabajaj|RahulSi60262144|Manankmr|manish_media|MensDayOutIndia|MeraNewsHindi|MNNewsLive|mohitchandrave1|mohitk_912|Ms_jodha|MyEsportsGlobe|mynews2020|nadircazi|nationalwmedia|NationFirst__|navdeepkesari|NewstoLive1|nimo_new|nirmalsingh1606|Niteshjumbo|nivie|old_india|OmanObserver|opednews|Ozaaer|p_vineeta|manish_media|_chaoticsaint_|_Its_Raj|_KAFAWA_|_soumyajit37|AAPExpress|AbdulMoid07|abhaykumarjnu|abhijitsingh18|AbhinandanSekhr|abhisheksinghpu|abhishekvats29|Abid_ali_uot|AggarwalSagar|AishaOluseye|AjayMeethale|ajkitaazakhabar|akfromindia|AkhbareMashriq1|akwaghmare|AllTheNewsIndia|AlokAryaveer|alternatekash|ameyamjoshi|amitghoshspeaks|amitgo|amitmaulviya|ammy263|amritananda_c|amustnews|AnantaAdhikar18|Andhra_Wishesh|AnilkumarAKM|anjalitiwari339|anjn|AppleheadWendy|ARUNSHARMAJI|AsgardianL0ki|ashokb56|ashokmuscat|AsiaDespatch|AsopaVinay|ASRNews1|atulr85|atwittiernil|AU_VaranasiNews|AvinashBharat2|ayushpandey49|balunair99|Bangladesh2day|BetaDroidIndia|betechs1|bgohil76|BHEnglish|bihaarkesari|bjp4fakenews|BonySen|BougtebMedia|CarlottaMohamed|CensoredToday|chalotweetkaro|charlesbhardwaj|ChhattisgarhThe|chinraj123|ChukkuNews|city_bollywood|ConnectionsCrat|CricketNDTV|curious_scribe|d1p70|Damn30704092|Deborahcox_caye|DeepkiranC|palakshahJourno|parikshit1012|PunjabiAngry|quickclarity|r_verma|ravapk|ReportHinduphob|nehaPatsariya|T04795327|TCP241|thehftprods|TheHinduCinema|Truenewsindia|Unknown14973713|vineetanews|bidyutchowdhury|FDikhana|Gyan_p_mishra|HatelaPappu|HimachalW|HindiFilmibeat|iamaashmehta|IndiLeak|jadoonjavedkhan|mytentaran|NahiChalegi|NCRKHABAR|Nguptaprakash|Rajeev_real|reports_india|sahiljoshii|Sanki_Tanashah|sniffthenews|the_newsvilla|TheViewsVoices|TimesMedia24hi|TOITopStories|YoungBhartiya|aajkitajakhabar|Ananyati|AnIdiotNature|AnkitMo61306367|BBN_India|BiharManthan|Engineer_Rahul1|Fatima_Z0hra|hindu_daily|LiveInqilab|lnnindia|mataonline|priyalovesnikon|Deshbhakt_NRI|desiblab|DevjyotGhoshal|Fakhrealam00786|GaurVatsala|gooner_neg|GreyFrost|hebdomedallic|Mango_News|N21chak|insidestoryind1|vaibhav8510|SamKhan999|sauravyadav1133|WORLDNEWSLAND1|Ishaqshk|mistbag|temurdur|theaerogram|thegreenhopes1|thepointout|tohidivity|Univrslfeelings|vigmukesh|vijaykjha|vishalnbt|whoizslmn|withcongresswb|WriterUnknow|XeroGround|yadavashutosh49|YAHHHKNOWWHAT|ZaqsPolitics|zohebkhan2|_Indiaupdates|_whatsinthenews|AbhiAvyakt|abhikhabartak|abhishe72539882|AbhiyaanChhapa|abntelugutv|aditisundan|alka1aug|alokverma1969|amit_trehan04|AmitKPalit|AnOpenLetter001|aparnaAD2|ApVeng|bhanujoshi01|Danny_deepz|DelReporter|deveshkumarbjp|dhairyam14|Dj_Cynical|DrAmol27|nishthasingh_13|aaliyagoyel1|nishant9717|MohammadSarva20|mann1043|Khabribhai1|karthikk_h|journalistHari|devsonukaushik|CholericCleric|bhavikgandhi_bg|ashfaqueamber|YadavPkjyadav|ellahi_ARY|ratnabhushanET|RaviPan31012457|real_Deepika_|RefMigrUpdate|sajidah_yousuf|sardesairajdeep|SarkDeb|scareme23|shanksnews|shindeckant|shivkishore81|shuklavivek92|siad_eng|SikheJane|singhshelleyET|snapnews3|SRIDHAR0520|StillAliveRicha|StreetBuzzApp|SuryanshiketSh3")
+                    
+
+```
+
+
+```{r}
+ind_screen <- ("SansaniPatrakar|rohitkr108|SiddharthaRai2|shia_channel|theiasindia|theindianminds|theindiapost1|JustaVoice1230|utpalschaudhary|ZennSays_|Rashida_Sial|ishubhambhatia|jatinbhutani92|KSMANN|SuparnaSharma|Hii_India|SYSCARE20|real_atta|whoskj2|Deepika81682230|withbjp4india|Itsak26|KajoriS|LijuMat21801891|lalithasundaram|KaustavB2|churumuri|jencyjac|naveengarewal|VidhyadharV|Swapnil_g23|syedgmurtaza|SyedIbr97161367|tagdef|takeonedigital|Tarique1391|TelangaanaBidda|IamMadhurendra|idattagupta|ihaveaview|ieDelhi|ImBrijeshsing|imfilmycom|ImmranKhalid|IMNnetwork10|ind2day|independentrep7|IndiaNe64115065|IndianNewsGuru|indiannewstv1|AapkaNews_in|heyjahan|Hii_India|hindi_vivek|Hindinewshubin|Hindu_Live|IAANGroup|infosecnews_|Inkhabar|inkl|iron_emu|ishubhambhatia|islamudinsajid|Itsak26|itvprashant|Jagadish_M|jahnavi_sen|jatinbhutani92|jayatrinMIRROR|jaypatel9491|jencyjac|jilajeetprajapa|johnnytorkustan|withbjp4india|maqbool_sm|SYSCARE20|swapnildwivedi4|HappeningNow__|KSMANN|krIshNDIA|whoskj2|Itsak26|Ferraodesigns|whoskj2|bhupendrachaube|nbtnavin0311|cgtop36|runku111|MSyedt|mohdvaseem01|SuparnaSharma|sadiakhurram|whoskj2|heyjahan|mohdvaseem01|tracyshilshi|cgtop36|Ms_jodha|Nspeaker95|Sundar_Ind|nerdmela|Hindu_Live|rakeshposwal|MaskManNews|sandarshikaa|GouravV38494306|pathak_praveen9|prepaidnewstra1|proud_bharat|QuickTake|Rajnishjee2|rakeshojjha|RakeshV24566992|Himansh59488582")
+
+neutral_screennames <- c("indiatvnews","TheQuint","timesofindia","latestly","htTweets","Outlookindia","NH_India","TV9Bharatvarsh","news18dotcom","DeccanHerald","NewsNationTV", "TimesNow","firstpost","TheHansIndiaWeb","thetribunechd","htdelhi","ndtv","aajtak","FinancialXpress","IndiaToday","HappeningNow__","NBTDilli","Oneindia","IndianExpress","WFNhindi","BigYack_India","ANN_Newsable","Newskarnataka","mathrubhumieng","LogicalIndians","SakshiPost","digitalgoa","udayavani_web","NorthEastToday","thenews_intl","DeccanChronicle","pakistaninews","NewsWingNews","ANI","EastMojo","prabhasakshi","ie_chennai","NewsStateHindi","Onmanorama","PatrikaNews","PhilDeCarolis","news24tvchannel","barandbench","AsiavilleNews","indialegalmedia","IndiaAheadNews","HcnNewsOfficial","NedrickExpress","WebduniaHindi","TheFederal_in","sakaltimes","IndiaFolo","Live_Hindustan", "talentedindiaTN", "PunjabKesariCom", "newzviewzoffice", "rashtra_news", "prabhatkhabar", "NewIndianXpress", "NewscheckerIn", "dt_next", "ABPNews", "NewsroomPostCom", "jagran_samachar", "DBhaskarHindi", "WyrcanNews","hwnewsnetwork", "NewsJunctionOrg", "TheSecondAngle", "Dailyaddaa", "editorji", "HindiKhabar", "WeForNews", "IndianEra24x7", "Pioneer_TS_AP", "SirfNewsIndia", "netindian", "ttindia", "Bharat24NewsTV", "TimesMedia24", "Gauri_News", "NMFNewsOfficial", "newsforsocial", "JantantraTv", "rninational", "UPkesari", "punjabkesari", "dailynews360", "DainikBhaskar", "HSnewsLive", "primenewslivetv", "AapkaNews_in", "LI_NewsChannel", "LiveUKOnline","newsclickin", "ImphalFreePress", "NENowNews", "time8news", "TNT_Magazine", "Breaking_24X7", "BengalNewz", "Bangladesh_BN", "AAPInNews","scroll_in","ZeeNews", "news8_plus", "GetNewsd", "TheCitizen_News", "pakistani_news",  "AJENews",         "cbnews_",         "DA_DEMOCRATIC",   "gnnhdofficial" ,  "kashmirobserver", "ahmedabadmirror","IndiaNewsStream", "ummid"  ,     "thehawk",         "TelanganaToday",  "ET_Specials",     "post_asia"  ,    "TimesofNewsHUB" , "HindustanTimes", "jknewstoday" , "News18India",    "YuvNewsOfficial", "thewire_in" ,     "madhyamam" ,      "theupdaterpost",  "mail_today",   "Jansatta", "fpjindia"  ,"ani_digital","dna", "DKashmirimages",  "rouutnews" ,      "MSShanker1"   ,   "THP_India",       "DuniyaSamay",    "livemint"    ,    "NewsSalam",       "CNBCTV18News", "NewsLiveGhy",  "moneycontrolcom", "EINReligionNews", "RajneetiNews"  ,  "TodayViews",  "r__worldnews"  ,  "lhrtimes",        "pioneer_haryana", "TOIIndiaNews",    "TheStatesmanLtd", "MumbaiMirror" , "IEBengaluru"    , "NewsEverything_", "mellonpost"  ,    "theViralLines",   "krIshNDIA", "NI24NEWS",        "JudiciaryNews",   "gulftoday",       "HydYouthMirror", "legal_india" ,    "prudentgoa",      "THChennai" , "fasak24x7",    "vidyabox1",       "LatestN50378800", "Nh1News",        "fastnation_"  ,   "moviemoodnews",   "SundayGuardian" , "MSyedt"    ,"mohdvaseem01"  , "jayatrinMIRROR",  "KelungaJ" ,       "JAMMULINKS"  , "Punjabpress" ,    "GurungShauryaET", "Eastern_Mirror",  "ThePuneMirror",   "Openthemag",     "rohingya_update", "HRWTruth","NELiveTV", "THMumbai", "samaydhara",      "inkl",            "liveindianews18", "ForumStrategic",       "NewDelhiTimes")
+```
+
+Creating a training set - Tweet classification - Anti_CAA, Pro_CAA
+```{r}
+library(tidyverse)
 #add pro and anti CAA column
-caa_text <- caa_text %>% mutate("")
+caa_text <- caa_text %>% mutate("CAA_stance" = case_when(
+  str_detect(hashtags, paste(anti_caa, collapse = "|")) ~ "Anti_CAA",
+  str_detect(hashtags, paste(pro_caa, collapse = "|")) ~ "Pro_CAA"
+   ))
 
-table(caa_dataset$hashtags)
 
+#Number of Pro_CAA and Anti_CAA labelled tweets - 115,176 - 21% tweets are labelled.
+table(caa_text$CAA_stance)
+
+```
+
+*Filter news organization from main dataset -- there could be something here*
+
+1. Filter out irrelevant tweets from news tweets 
+2. Remove duplicated tweets from news deck
+3. Total count of distinct tweets from news organisations - 6,286
+
+```{r}
+
+news_tweets <- caa_text %>% filter(str_detect(description, news_words)==TRUE) %>% distinct(text, .keep_all = TRUE)
+
+#remove indvidual accounts from the news accounts  (Approximate cleaning)
+news_tweets_dis <- news_tweets %>% filter(!str_detect(screen_name, ind_screen_name)==TRUE)
+
+news_tweets_dis <- news_tweets_dis %>% filter(!str_detect(screen_name, ind_screen)==TRUE)
+
+#Add the news/Not_news column to tweet columns
+news_tweets_dis <- news_tweets_dis %>% mutate(news_notnews = "News")
+
+#Add stance to the CAAstance column
+news_tweets_dis <- news_tweets_dis %>% mutate("CAA_stance" = case_when(
+  str_detect(hashtags, paste(anti_caa, collapse = "|")) ~ "Anti_CAA",
+  str_detect(hashtags, paste(pro_caa, collapse = "|")) ~ "Pro_CAA",
+  str_detect(screen_name, paste(neutral_screennames, collapse = "|")) ~ "Neutral"
+   ))
+
+table(news_tweets_dis$CAA_stance)
+head(news_tweets_dis )
+write_excel_csv(news_tweets_dis, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/news_org_tweets.csv")
+```
+
+
+```{r}
+
+#Dataset containing "Distinct" "no-news org" tweets (Hopefully!)
+citizen_tweets <- caa_text %>% filter(!text %in% news_tweets_dis$text) %>% distinct(text, .keep_all = TRUE)
+
+#Remove useless tweets from the dataset
+citizen_tweets <- citizen_tweets %>% filter(!str_detect(screen_name, "_cricketkeeda")==TRUE)
+
+#Add extra news/not_news column to the dataset
+citizen_tweets <- citizen_tweets %>% mutate(news_notnews = "Not News")
+
+table(citizen_tweets$CAA_stance) #22% tweets are labelled.
+
+table(citizen_tweets$lang) #More Hindi tweets than English tweets -> En:Hi : 44:56 ratio
+
+#Write the cleaned table to the CSV
+write_excel_csv(citizen_tweets,"/Users/shreyaagarwal/Google Drive/Dissertation/Data/citizen_tweets.csv" )
+```
+
+*Dataset with -- Lang, Stance, News/NotNews columns* - 25% of the dataset is labelled - Neutral, Anti, Pro
+```{r}
+
+#Join the two datasets - news and citizen tweets 
+caa <- rbind(citizen_tweets, news_tweets_dis) 
+
+write_excel_csv(caa, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/combined_news_citizen_tweets.csv")
+```
+
+Step 1: Clean the text
+```{r}
+#Read the combined text file
+caa <- fread("/Users/shreyaagarwal/Google Drive/Dissertation/Data/combined_news_citizen_tweets.csv", header = TRUE)
+
+#caa <- caa[,-c(1,2)]
+
+#Read the hindi stopwords file
+hi_stop <- readLines("/Users/shreyaagarwal/Google Drive/Dissertation/Data/final_stopwords.txt", encoding = "UTF-8")
+
+#Read hinglish stopwords file
+hiEng_stop <- readLines("/Users/shreyaagarwal/Google Drive/Dissertation/Data/hinglish_stopwords.txt")
+
+#devtools::install_github("quanteda/stopwords")
+
+
+#Step 1: Scrub the text - hashtags, links, punctuation marks, stopwords, help words
+#Step 2: Get the text
+#Step 3: Tokenize
+#Step 4: lemmatize
+
+#Step 1
+caa$text <- as.character(caa$text)
+
+caa$text <- gsub("<.*?>", "", caa$text) #get rid of stuff within brackets
+caa$text <- gsub("http[[:alnum:][:punct:]]*", "", caa$text) #get rid of links and punctuation
+caa$text <- str_replace_all(caa$text,"#[a-z,A-Z]*","") #get rid of hashtags
+caa$text <- str_replace_all(caa$text,"@[a-z,A-Z]*","") #get rid of references of other screen names
+caa$text = gsub("[[:punct:]]", "", caa$text) #get rid of punctuation
+caa$text = gsub("[[:digit:]]", "", caa$text) #get rid of digits
+caa$text <- str_replace_all(caa$text," "," ") #get rid of unncessary space
+caa$text <- trimws(caa$text, "l")
+
+write_excel_csv(caa, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/combined_news_citizen_filtered.csv")
+#separate the unlabelled data
+
+caa_labelled <- caa %>% filter(!is.na(CAA_stance))
+
+
+set.seed(10)
+
+caa_sample <- sample_n(caa_labelled, 8000)
+```
+
+
+```{r}
+
+#Step 2: Make the text column a Quanteda corpus object 
+caaText <- corpus(caa_sample$text, 
+                  docvars = data.frame(CAA_stance = caa_sample$CAA_stance,
+                                       lang = caa_sample$lang,
+                                       news = caa_sample$news_notnews,
+                                       date = caa_sample$created_at))
+
+#Summary of the corpus - number of types, tokens, and sentence in each text
+#summary(caaText)
+
+#Step 3: tokenize
+caaText_token <- tokens(caaText, remove_symbols = TRUE, remove_numbers = TRUE) 
+#head(caaText_token,10)
+
+#Step 4: Convert it to DFM
+caa_DFM <- dfm(caaText_token, remove = c(stopwords("en"), stopwords("hi", source = "stopwords-iso"), hi_stop, hiEng_stop),tolower = TRUE, verbose = TRUE)
+
+caa_tfidf <- dfm_tfidf(caa_DFM, scheme_tf = "count") %>% round(digits = 2)
+
+#head(caa_tfidf[,21:34])
+
+#trim the dfm
+caa_trim <- dfm_trim(caa_tfidf, min_termfreq = 5, min_docfreq = 2)
+
+```
+
+Step 2: 
+
+Apply Machine learning algorithms to predict the labels - 1. Naive bayes, 2. SVM
+```{r}
+#1. create training dataset
+#rm(caa_trim)
+
+train_index <- sample(1:nrow(caa_sample), 0.8 * nrow(caa_sample))
+test_index <- setdiff(1:nrow(caa_sample), train_index)
+
+caa_dfm_train <- caa_trim[train_index, ]
+caa_dfm_test <- caa_trim[test_index, ]
+
+caa_train_labels <- caa_sample[train_index, ]$CAA_stance
+caa_test_labels <- caa_sample[test_index, ]$CAA_stance
+
+prop.table(table(caa_train_labels))
+prop.table(table(caa_test_labels))
+
+```
+
+Step2: Applying the model
+```{r}
+library(e1071)
+library("pryr")
+library(gmodels)
+
+devtools::install_github("krlmlr/ulimit")
+ulimit::memory_limit(2000)
+
+#build the classfier
+caa_classifier <- svm(caa_train_labels~. , data = caa_dfm_train,method="C-classification", kernal="radial", 
+          gamma=0.1, cost=10)
+
+caa_pred <- predict(caa_classifier, caa_dfm_test)
+
+require(caret)  # Load caret package
+
+ctrl <- trainControl(method = "cv", number = 7) # 10-fold CV
+
+
+set.seed(100)  
+
+caa_classifier <- train(caa_dfm_train, caa_train_labels,
+                  method = "rpart", trControl = ctrl) # train random forest
+
+rf.tfidf
+
+caa_dfm_train
+```
+
+
+```{r}
+CrossTable(caa_pred, caa_test_labels, prop.chisq = FALSE, chisq = FALSE, 
+           prop.t = FALSE,
+           dnn = c("Predicted", "Actual"))
 ```
 

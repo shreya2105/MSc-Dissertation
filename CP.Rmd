@@ -17,8 +17,10 @@ setwd("/Users/shreyaagarwal/Documents/Code/Machine Learning/Dissertation/Capston
 
 ```
 
+
 ```{r}
 library(data.table)  
+library(readr)
 
 #read all csv files from folder
 files <- list.files(pattern = ".csv")
@@ -27,7 +29,7 @@ files <- list.files(pattern = ".csv")
 temp <- lapply(files, fread, sep=",")
 data <- rbindlist(temp, fill = TRUE)
 
-write.csv(data, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/allcombineddata.csv")
+write_excel_csv(data, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/allcombineddata.csv")
 ```
 
 
@@ -38,12 +40,12 @@ data_unique <- unique(data)
 
 data_unique_lang <- data_unique %>% filter(lang == "hi" | lang == "en" )
 data_unique_lang$created_at <- lubridate::as_date(data_unique_lang$created_at)
-table(data_unique_lang$created_at)
+#table(data_unique_lang$created_at)
 
 #Check language breakup
-table(data_unique$lang)
+#table(data_unique$lang)
 
-write.csv(data_unique_lang, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/unique_rows_hi_eng.csv")
+write_excel_csv(data_unique_lang, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/unique_rows_hi_eng.csv")
 ```
 
 Check for duplication in text columns - tweets - 231,910
