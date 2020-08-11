@@ -1,0 +1,346 @@
+---
+title: "Hypothesis 1"
+author: "SA"
+date: "7/17/2020"
+output: html_document
+---
+
+Hypothesis 1 - Does popular words in tweets reflect real world events in real time? 
+```{r}
+
+library(tidyverse)
+library(data.table)
+library(anytime)
+```
+
+
+```{r}
+complete_dataset <- fread("/Users/shreyaagarwal/Google Drive/Dissertation/Data/allcombineddata.csv")
+
+complete_dataset$created_at1 <- lubridate::as_date(complete_dataset$created_at)
+
+#Cleaning dates
+gooddates <- complete_dataset %>% filter(!is.na(created_at1))
+baddates <- complete_dataset %>% filter(is.na(created_at1))
+
+baddates$created_at1 <- lubridate::mdy_hm(baddates$created_at)
+baddates$created_at1 <- lubridate::as_date(baddates$created_at1)
+
+baddates <- baddates %>% filter(!is.na(created_at1))
+
+complete_dataset <- rbind(gooddates,baddates)
+
+saveRDS(complete_dataset, file = "/Users/shreyaagarwal/Google Drive/Dissertation/Data/allcombineddata.rds")
+```
+
+Filter unique tweets into English and Hindi
+```{r}
+unique_dataset <- complete_dataset %>% filter(lang == "hi" | lang == "en" ) %>% unique() #540920 tweets 540417
+
+unique_dataset <- unique_dataset %>% select(-c("favorite_count"))
+unique_dataset <- unique_dataset %>% unique() #538,588 tweets
+unique_dataset <- unique_dataset %>% filter(screen_name != "RajeshS64599380")
+unique_dataset <- unique_dataset %>% filter(screen_name != "dropdrivetweet")
+unique_dataset <- unique_dataset %>% filter(screen_name != "_cricketkeeda")
+
+udata <- unique_dataset %>% distinct(user_id, status_id, created_at, screen_name, text, .keep_all = TRUE) #301,913
+saveRDS(udata, file = "/Users/shreyaagarwal/Google Drive/Dissertation/Data/uniquedata.rds")
+#system.time(write.csv(udata, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/uniquedata.csv"))
+```
+
+
+```{r}
+library(data.table)
+library(tidyverse)
+
+udata <- fread("/Users/shreyaagarwal/Google Drive/Dissertation/Data/uniquedata.csv")
+
+#S is dataset with unique set of tweets
+s <- udata %>% distinct(text, .keep_all = TRUE)
+
+s$created_at <- lubridate::as_date(s$created_at)
+
+lubridate::as_date(2019-12-01) - lubridate::as_date(2020-03-07)
+
+hidata <- s %>% filter(lang == "hi")
+endata <- s %>% filter(lang == "en")
+
+saveRDS(hidata, file = "/Users/shreyaagarwal/Google Drive/Dissertation/Data/hi_data.rds")
+saveRDS(endata, file = "/Users/shreyaagarwal/Google Drive/Dissertation/Data/en_data.rds")
+
+```
+
+average tweets per account
+```{r}
+
+NROW(unique(udata$screen_name))  #110,423 users
+NROW(unique(udata$text))  # unique 231,684 tweets
+NROW(udata$text) #301,913 tweets
+
+tweets_per_average_user <- NROW(udata$text)/NROW(unique(udata$screen_name)) #Average tweet per user: 2.7
+
+
+```
+
+Creating a dataframe for tweets per user, and total tweets and #users.
+```{r}
+
+table_users <- s %>% select("screen_name", "text", "created_at") %>% group_by(screen_name)  %>% tally()
+
+#sum of tweets
+table_users %>% arrange(desc(n))
+
+table_users <- table_users %>% mutate(numberoftweets = case_when(n == 1 ~ '1',
+                                             n == 2 ~ '2',
+                                             n == 3 ~ '3', 
+                                             n == 4 ~ '4', 
+                                             n > 4 & n <= 10 ~ '5to10',
+                                             n > 10 & n <= 20 ~ '11to20', 
+                                             n > 20 & n <= 50 ~ '21to50',
+                                             n > 50 & n <= 100 ~ '51to100',
+                                             n > 100 ~ '>100'))
+#number of tweets by group
+table_users %>% group_by(numberoftweets) %>% summarize(countn = sum(n))  
+table_users %>% group_by(numberoftweets) %>% summarize(users = n())
+
+datatally <- data.frame(tweets = table_users %>% group_by(numberoftweets) %>% summarize(tweets = sum(n)),
+              sum = table_users %>% group_by(numberoftweets) %>% summarize(users = n()))
+
+datatally
+```
+
+Clean the text
+```{r}
+endata$text <- as.character(endata$text)
+endata$text <- gsub("<.*?>", "", endata$text) #get rid of stuff within brackets
+endata$text <- gsub("http[[:alnum:][:punct:]]*", "", endata$text) #get rid of links and punctuation
+endata$text <- str_replace_all(endata$text,"#[a-z,A-Z]*","") #get rid of hashtags
+endata$text <- str_replace_all(endata$text,"@[a-z,A-Z]*","") #get rid of references of other screen names
+endata$text = gsub("[[:punct:]]", "", endata$text) #get rid of punctuation
+endata$text = gsub("[[:digit:]]", "", endata$text) #get rid of digits
+endata$text <- str_replace_all(endata$text," "," ") #get rid of unncessary space
+endata$text <- trimws(endata$text, "l")
+
+```
+
+#Hypothesis 1 - Analysis
+
+Most popular terms in English Corpus -- **Frequency Analysis** on English text
+```{r}
+
+#Read Hindi stopwords file
+hi_stop <- readLines("/Users/shreyaagarwal/Google Drive/Dissertation/Data/final_stopwords.txt", encoding = "UTF-8")
+
+#Read hinglish stopwords file
+hiEng_stop <- readLines("/Users/shreyaagarwal/Google Drive/Dissertation/Data/hinglish_stopwords.txt")
+
+library(quanteda)
+
+encorpus <- corpus (endata$text, 
+                   docvars = data.frame(date1 = endata$created_at1))
+                                        
+
+dfm <- corpus_subset(encorpus) %>%
+    dfm(remove = c(stopwords("en"), stopwords("hi", source = "stopwords-iso"), hi_stop, hiEng_stop, "amp", "India","indian" ,"muslims", "hindus", "country", "protestors", "nrc", "nrcprotests", "caa", "CAA", "anti", "pro"), remove_punct = TRUE) %>%
+    dfm_trim(min_termfreq = 20, verbose = FALSE)
+
+dfm_tf <- dfm_tfidf(dfm,
+  scheme_tf = "prop",
+  scheme_df = "inverse")
+
+tstat_freq <- textstat_frequency(dfm, n = 30, force = TRUE)
+
+head(tstat_freq, 30)
+```
+
+#Frequency Analysis on all the text
+```{r}
+hi_stop <- readLines("/Users/shreyaagarwal/Google Drive/Dissertation/Data/final_stopwords.txt", encoding = "UTF-8")
+
+#Read hinglish stopwords file
+hiEng_stop <- readLines("/Users/shreyaagarwal/Google Drive/Dissertation/Data/hinglish_stopwords.txt")
+
+scorpus <- corpus (s$text, 
+                   docvars = data.frame(date1 = s$created_at1))
+                                        
+#Remove unrequired words
+dfm <- corpus_subset(scorpus) %>%
+    dfm(remove = c(stopwords("en"), stopwords("hi", source = "stopwords-iso"), hi_stop, hiEng_stop, "amp", "India","nrcnpr" ,"india","ind","muslim" ,"nrc","नही", "nrcprotests", "caa", "CAA","दिल्ली","देश", "बाग","anti", "pro", "शाहीनबागजीतेगामोदीहारेगा","शाहीनबागहारेगादेशजितेंगा","शाहीनबागबचाएगासंविधान"), remove_punct = TRUE) %>%
+    dfm_trim(min_termfreq = 20, verbose = FALSE)
+
+dfm_tf <- dfm_tfidf(dfm,
+  scheme_tf = "prop",
+  scheme_df = "inverse")
+
+tstat_freq <- textstat_frequency(dfm_tf, n = 30, force = TRUE)
+
+head(tstat_freq, 30)
+```
+
+#Count of tweets containing the following popular words
+```{r}
+library(stringr)
+
+words <- s %>% select("created_at1","text") %>% filter(str_detect(text,"जिहादीयों|जिहाद |Jehad|Jihadi|Jehadi|Jihad|jehadi|jehad|jihadi|jihad|दिल्ली|छात्रों|नागरिकों |नागरिक|महिलाओं|औरतें|महिलाएँ|पुलिस|citizen|Citizen|Citizens|Citizenship|Women|Students|Delhi|Police|police|delhi|students|women|citizenship|protestors|Protestors|Protesters|antionational|Antinational|Anti national|Violence|muslim|muslims|Riots|Religion|Religions|Protest|Protests|Secular|Secularism|Hindu|Hindus|hindus|hindu|हिन्दू|religion|religions|dharma|धर्म|secular|secularism|सेक्युलर|मुस्लिम|Muslims|मुसलमान|Muslim|Islam|इस्लाम|protest|protests|protesters|violence|students|riots|antinationals|anti national|secularism|विरोध|विरोधी|विरोधियों|हिंसा|caa|CAA|BJP|bjp|बीजेपी|भाजपा|Shaheen Bagh|Shaheen bagh|shaheen bagh|शाहीन बाग"))
+
+words <- words %>% mutate(hindu = str_count(text,"Hindu|Hindus|hindus|hindu|हिंदू|हिन्दू")) %>% 
+  mutate(muslim = str_count(text, "muslim|muslims|मुस्लिम|Muslims|मुसलमान|Muslim|Islam|इस्लाम")) %>% 
+  #mutate(religion = str_count(text, "Religions|Religion|religion|religions|dharma|धर्म")) %>% 
+  #mutate(secular = str_count(text, "Secularism|Secular|secular|secularism|सेक्युलर")) %>% 
+  mutate(protest = str_count(text, "Protests|Protest|protest|protests|विरोध|विरोधी|विरोधियों")) %>% 
+  mutate(violence = str_count(text, "Violence|violence|हिंसा")) %>% 
+  #mutate(Riots = str_count(text, "Riots|riots")) %>% 
+  #mutate(antinational = str_count(text, "antinationals|Antinational|Anti national|antinational|anti national")) %>% 
+  #mutate(protesters = str_count(text, "Protesters|Protestors|protestors|protesters")) %>% 
+  #mutate(caa = str_count(text, "caa|CAA|")) %>% 
+  mutate(police = str_count(text, "police|Police|पुलिस")) %>% 
+  #mutate(women = str_count(text, "Women|women|महिलाओं|औरतें|महिलाएँ")) %>% 
+  #mutate(citizen = str_count(text, "नागरिकों|नागरिक|citizenship|citizen|Citizen|Citizenship|नागरिकता")) %>% 
+  #mutate(students = str_count(text, "students|Students|छात्रों")) %>% 
+  mutate(Delhi = str_count(text, "Delhi|delhi|दिल्ली")) %>% 
+  #mutate(Jihad = str_count(text, "जिहादीयों|जिहाद|Jehad|Jihadi|Jehadi|Jihad|jehadi|jehad|jihadi|jihad")) 
+  mutate(BJP = str_count(text, "BJP|bjp|बीजेपी|भाजपा")) %>% 
+  mutate(shaheenbagh = str_count(text, "Shaheen Bagh|Shaheen bagh|shaheen bagh|शाहीन बाग")) 
+
+write.xlsx(words,"/Users/shreyaagarwal/Google Drive/Dissertation/Data/Hypothesis11.xlsx")
+
+days <- s %>% group_by(created_at1) %>% dplyr::summarize(totaltweets = n())
+
+write.csv(days,"/Users/shreyaagarwal/Google Drive/Dissertation/Data/days.csv")
+
+```
+#Time -series Visualization of the words selected above
+```{r}
+library(ggplot2)
+library("tidyverse")
+
+wordtally <- readxl::read_excel("/Users/shreyaagarwal/Google Drive/Dissertation/Data/Hypothesis11.xlsx", sheet = "Sheet3")
+
+wordtally$Dates <- as.Date(wordtally$Dates)
+
+
+df <- wordtally %>%
+  gather(key = "variable", value = "value", -Dates)
+
+q <- ggplot(df, aes(x = Dates, y = value*100)) + 
+  geom_line(aes(color = variable)) +
+  labs(x = "Date", y = "% of tweets") +
+  theme_classic() +
+  facet_wrap(~variable) +
+  theme(legend.position = "none") 
+
+ggsave("q.jpeg")
+
+```
+
+#Count of tweets containing the following popular words
+```{r}
+words <- udata %>% select("created_at1","text") %>% filter(str_detect(text,"जिहादीयों|जिहाद |Jehad|Jihadi|Jehadi|Jihad|jehadi|jehad|jihadi|jihad|दिल्ली|छात्रों|नागरिकों |नागरिक|महिलाओं|औरतें|महिलाएँ|पुलिस|citizen|Citizen|Citizens|Citizenship|Women|Students|Delhi|Police|police|delhi|students|women|citizenship|protestors|Protestors|Protesters|antionational|Antinational|Anti national|Violence|muslim|muslims|Riots|Religion|Religions|Protest|Protests|Secular|Secularism|Hindu|Hindus|hindus|hindu|हिंदू|हिन्दू|religion|religions|dharma|धर्म|secular|secularism|सेक्युलर|मुस्लिम|Muslims|मुसलमान|Muslim|Islam|इस्लाम|protest|protests|protesters|violence|students|riots|antinationals|anti national|secularism|विरोध|विरोधी|विरोधियों|हिंसा|caa|CAA|Delhi police|delhi police|दिल्ली पुलिस|Shaheen Bagh|Shaheen bagh|shaheen bagh|शाहीन बाग|anti CAA|Anti CAA|anti caa|pro CAA|Pro CAA|pro caa|Pro caa|kapil mishra|Kapil Mishra|कपिल मिश्रा|ankit sharma|Ankit Sharma|अंकित शर्मा")) 
+
+words <- words %>% mutate(hindu = str_count(text,"Hindu|Hindus|hindus|hindu|हिंदू|हिन्दू")) %>% 
+  mutate(muslim = str_count(text, "muslim|muslims|मुस्लिम|Muslims|मुसलमान|Muslim|Islam|इस्लाम")) %>% 
+  mutate(delhipolice = str_count(text, "Delhi police|delhi police|दिल्ली पुलिस")) %>% 
+  mutate(shaheenbagh = str_count(text, "Shaheen Bagh|Shaheen bagh|shaheen bagh|शाहीन बाग")) %>% 
+  mutate(protest = str_count(text,"Protesters|Protestors|protestors|protesters|Protests|Protest|protest|protests|विरोध|विरोधी|विरोधियों")) %>% 
+  mutate(violence = str_count(text, "Riots|riots")) %>% 
+  mutate(violence = str_count(text, "Violence|violence|voilence||हिंसा")) %>% 
+  mutate(CAA = str_count(text, "CAA|caa")) %>% 
+  mutate(police = str_count(text, "police|Police|पुलिस")) %>% 
+  mutate(kapilmishra = str_count(text, "kapil mishra|Kapil Mishra|कपिल मिश्रा")) %>% 
+  mutate(ankitsharma = str_count(text, "ankit sharma|Ankit Sharma|अंकित शर्मा")) 
+
+
+library(openxlsx)
+write.xlsx(words,"/Users/shreyaagarwal/Google Drive/Dissertation/Data/hypothesis1.xlsx")
+```
+
+
+```{r}
+#need more evidence for Kapil Mishra and Ankit Sharma that they were ppular words on certain days
+
+moreevidence <- read.xlsx("/Users/shreyaagarwal/Google Drive/Dissertation/Data/hypothesis1.xlsx", sheet = "Sheet4")
+
+
+df <- moreevidence %>%
+  gather(key = "variable", value = "value", -Dates)
+
+df$Dates <- as.Date(df$Dates)
+
+df1<- df %>% filter (variable == "Kapil.Mishra" | variable== "Ankit.Sharma") 
+
+cbp1 <- c("#999999", "#E69F00", "#56B4E9", "#009E73",
+          "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#000000", "#00AFBB", "#E7B800", "#AA4371", "#00FF00", "#4DB3E6")
+
+p <- ggplot(df1, aes(x = Dates, y = (value*100))) + 
+  geom_line(aes(color = "variable")) + 
+  labs(x = "Date", y = "% of tweets") +
+  theme_classic()
+  
+p+facet_wrap(~variable) +
+  theme(legend.position = "none") 
+
+ggsave("p.jpeg")
+
+
+```
+
+For Q1 - descriptive terms 
+This analysis is for descriptive analysis in first question of the dissertation -- 
+
+- Checks count of popular words used in both the clusters - Pro CAA and Anti CAA
+```{r}
+words1 <- udata %>% select("created_at1","text") %>% filter(str_detect(text,"जिहादीयों|जिहाद |Jehad|Jihadi|Jehadi|Jihad|jehadi|jehad|jihadi|jihad|citizen|Citizen|Citizens|Citizenship|citizenship|protestors|Protestors|Protesters|antionational|Antinational|Anti national|muslim|muslims|Secular|Secularism|Hindu|Hindus|hindus|hindu|हिंदू|हिन्दू|religion|religions|dharma|धर्म|secular|secularism|सेक्युलर|मुस्लिम|Muslims|मुसलमान|Muslim|Islam|इस्लाम|protest|protests|protesters|violence|students|riots|antinationals|anti national|secularism|caa|सीएए|CAA|मानवाधिकार|Minority|Minorities|minority|minorities|अल्पसंख्यक|अल्पसंख्यकों|Human rights|Human Rights|human rights|rights|Rights|मानवाधिकार|मानव|अधिकार|citizenship|Citizenship|नागरिकता|fascist|fascism|Fascist|Fascism|islamic|Islamic|इस्लामी|Persecution|persecution|persecuted|Persecuted|उत्पीड़न|नागरिकता|धर्म"))
+
+words1 <- words1 %>% mutate(hindu = str_count(text,"Hindu|Hindus|hindus|hindu|हिंदू|हिन्दू")) %>% 
+  mutate(muslim = str_count(text, "muslim|muslims|मुस्लिम|Muslims|मुसलमान|Muslim|Islam|इस्लाम")) %>% 
+  mutate(religion = str_count(text, "Religions|Religion|religion|religions|dharma|धार्मिक|धर्म")) %>% 
+  mutate(secular = str_count(text, "Secularism|Secular|secular|secularism|सेक्युलर")) %>% 
+  mutate(antinational = str_count(text, "antinationals|Antinational|Anti national|antinational|anti national")) %>% 
+  mutate(caa = str_count(text, "caa|CAA|सीएए")) %>% 
+  mutate(citizen = str_count(text, "नागरिकों|नागरिक|citizen|Citizen") ) %>% 
+  mutate(Jihad = str_count(text, "जिहादीयों|जिहाद|Jehad|Jihadi|Jehadi|Jihad|jehadi|jehad|jihadi|jihad")) %>%
+  mutate(citizenship = str_count(text, "citizenship|Citizenship|नागरिकता")) %>% 
+  mutate(Persecution = str_count(text, "Persecution|persecution|persecuted|Persecuted|उत्पीड़न"))%>% 
+  mutate(Islamic = str_count(text, "islamic|Islamic|इस्लामी")) %>% 
+  mutate(Fascist = str_count(text, "fascist|fascism|Fascist|Fascism")) %>% 
+  mutate(HumanRights = str_count(text, "Human rights|Human Rights|human rights|rights|Rights|मानवाधिकार|मानव अधिकार")) %>% 
+  mutate(Minority = str_count(text, "Minority|Minorities|minority|minorities|अल्पसंख्यक|अल्पसंख्यकों"))
+           
+
+
+write.xlsx(words1,"/Users/shreyaagarwal/Google Drive/Dissertation/Data/wordsQ1.xlsx")
+```
+
+#Creating time-series visualization of the words mentioned above
+```{r}
+
+worddata<- read.xlsx("/Users/shreyaagarwal/Google Drive/Dissertation/Data/wordsQ1.xlsx", sheet = "Sheet3")
+
+worddata$Dates <- as.Date(worddata$Dates)
+
+#To avoid scientific numbers
+options("scipen"=999)
+
+df <- worddata %>%
+  gather(key = "variable", value = "value", -Dates)
+
+df1<- df %>% filter (variable!= "CAA" & variable!= "Citizen" & variable!= "Citizenship") 
+
+cbp1 <- c("#999999", "#E69F00", "#56B4E9", "#009E73",
+          "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#000000", "#00AFBB", "#E7B800", "#AA4371", "#00FF00", "#4DB3E6")
+
+p <- ggplot(df1, aes(x = Dates, y = (value*100))) + 
+  geom_line(aes(color = "variable")) + 
+  labs(x = "Date", y = "% of tweets") +
+  theme_classic()
+  
+p+scale_color_manual(values = cbp1) + 
+  facet_wrap(~variable) +
+  theme(legend.position = "none") 
+
+ggsave("p.jpeg")
+```
+
+
+
+

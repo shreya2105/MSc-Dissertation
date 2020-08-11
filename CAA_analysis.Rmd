@@ -14,22 +14,8 @@ library(lubridate)
 
 ```
 
+Read the data and filter unrequired columns 
 ```{r}
-caa_dataset <- fread("/Users/shreyaagarwal/Google Drive/Dissertation/Data/unique_rows_hi_eng.csv")
-
-#Remove source_ bots from the main dataset
-caa_dataset <- caa_dataset %>% filter(!str_detect(source, "...Bot"))
-```
-
-
-```{r}
-#Write the cleaned dataset to csv
-write_excel_csv(caa_dataset, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/unique_rows_hi_eng.csv")
-```
-
-Data Cleaning
-```{r}
-
 caa_dataset <- fread("/Users/shreyaagarwal/Google Drive/Dissertation/Data/unique_rows_hi_eng.csv")
 
 caa_dataset <- caa_dataset[,-c(1,2)]
@@ -44,6 +30,7 @@ hashtags <- as.data.table(table(caa_dataset$hashtags))
 ```
 
 Word lists for columns - hashtags, description, screen_name
+- assign hashtags to Pro CAA, Anti CAA and Neutral stance
 ```{r}
 #Str_detect
 anti_caa <- c("WeReject_CAA_NPR_NRC", "IndiaAgainstCAA_NRC", "notocaa", "kagaj_nahi_dikhayenge", "Anti_CAA","शाहीनबाग_जीतेगा_मोदी_हारेगा","UNRejectsCAA","IndiaAgainstCAA","AmitShahIstifaDo","RejectCAA","IndiaAgainstCAA_NRC_NPR","ArrestKapilMishra","SCSTOBC_Against_Hate", "CrimesAgainstHumanity","HinduTerror")
@@ -87,7 +74,7 @@ table(caa_text$CAA_stance)
 
 ```
 
-*Filter news organization from main dataset -- there could be something here*
+*Filter news organization from main dataset*
 
 1. Filter out irrelevant tweets from news tweets 
 2. Remove duplicated tweets from news deck
@@ -112,9 +99,6 @@ news_tweets_dis <- news_tweets_dis %>% mutate("CAA_stance" = case_when(
   str_detect(screen_name, paste(neutral_screennames, collapse = "|")) ~ "Neutral"
    ))
 
-table(news_tweets_dis$CAA_stance)
-head(news_tweets_dis )
-write_excel_csv(news_tweets_dis, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/news_org_tweets.csv")
 ```
 
 
@@ -129,12 +113,11 @@ citizen_tweets <- citizen_tweets %>% filter(!str_detect(screen_name, "_cricketke
 #Add extra news/not_news column to the dataset
 citizen_tweets <- citizen_tweets %>% mutate(news_notnews = "Not News")
 
-table(citizen_tweets$CAA_stance) #22% tweets are labelled.
+#22% tweets are labelled.
+table(citizen_tweets$CAA_stance) 
 
 table(citizen_tweets$lang) #More Hindi tweets than English tweets -> En:Hi : 44:56 ratio
 
-#Write the cleaned table to the CSV
-write_excel_csv(citizen_tweets,"/Users/shreyaagarwal/Google Drive/Dissertation/Data/citizen_tweets.csv" )
 ```
 
 *Dataset with -- Lang, Stance, News/NotNews columns* - 25% of the dataset is labelled - Neutral, Anti, Pro
@@ -143,7 +126,6 @@ write_excel_csv(citizen_tweets,"/Users/shreyaagarwal/Google Drive/Dissertation/D
 #Join the two datasets - news and citizen tweets 
 caa <- rbind(citizen_tweets, news_tweets_dis) 
 
-write_excel_csv(caa, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/combined_news_citizen_tweets.csv")
 ```
 
 Step 1: Clean the text
@@ -163,11 +145,7 @@ hiEng_stop <- readLines("/Users/shreyaagarwal/Google Drive/Dissertation/Data/hin
 
 
 #Step 1: Scrub the text - hashtags, links, punctuation marks, stopwords, help words
-#Step 2: Get the text
-#Step 3: Tokenize
-#Step 4: lemmatize
 
-#Step 1
 caa$text <- as.character(caa$text)
 
 caa$text <- gsub("<.*?>", "", caa$text) #get rid of stuff within brackets
@@ -178,102 +156,146 @@ caa$text = gsub("[[:punct:]]", "", caa$text) #get rid of punctuation
 caa$text = gsub("[[:digit:]]", "", caa$text) #get rid of digits
 caa$text <- str_replace_all(caa$text," "," ") #get rid of unncessary space
 caa$text <- trimws(caa$text, "l")
-
-write_excel_csv(caa, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/combined_news_citizen_filtered.csv")
-#separate the unlabelled data
-
-caa_labelled <- caa %>% filter(!is.na(CAA_stance))
-
-
-set.seed(10)
-
-caa_sample <- sample_n(caa_labelled, 8000)
 ```
 
 
 ```{r}
 
-#Step 2: Make the text column a Quanteda corpus object 
-caaText <- corpus(caa_sample$text, 
-                  docvars = data.frame(CAA_stance = caa_sample$CAA_stance,
-                                       lang = caa_sample$lang,
-                                       news = caa_sample$news_notnews,
-                                       date = caa_sample$created_at))
+library(tidyverse)
+library(data.table)
 
-#Summary of the corpus - number of types, tokens, and sentence in each text
-#summary(caaText)
+caa <- fread("/Users/shreyaagarwal/Google Drive/Dissertation/Data/combined_news_citizen_filtered.csv")
 
-#Step 3: tokenize
-caaText_token <- tokens(caaText, remove_symbols = TRUE, remove_numbers = TRUE) 
-#head(caaText_token,10)
 
-#Step 4: Convert it to DFM
-caa_DFM <- dfm(caaText_token, remove = c(stopwords("en"), stopwords("hi", source = "stopwords-iso"), hi_stop, hiEng_stop),tolower = TRUE, verbose = TRUE)
+caa_english <- caa %>% filter(lang == "en")
+caa_hi <- caa %>% filter(lang == "hi")
 
-caa_tfidf <- dfm_tfidf(caa_DFM, scheme_tf = "count") %>% round(digits = 2)
+caa_hitext <- caa_hi[1:20000,] 
+caa_hi_rest <- caa_hi[20001:129010,]
 
-#head(caa_tfidf[,21:34])
+#was created because excel could not read the massive dataset. So, it was split into 20:80.
+caa_halftext <- fread("/Users/shreyaagarwal/Downloads/hi_tweets_subtext - hi_tweets_subtext.csv")
 
-#trim the dfm
-caa_trim <- dfm_trim(caa_tfidf, min_termfreq = 5, min_docfreq = 2)
+#and then rbind-ed
+caa_hindi <- rbind(caa_hi_rest,caa_halftext)
 
-```
+(caa_hindi$CAA_stance)
 
-Step 2: 
+write_excel_csv(caa_english, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/english_tweets.csv")
 
-Apply Machine learning algorithms to predict the labels - 1. Naive bayes, 2. SVM
-```{r}
-#1. create training dataset
-#rm(caa_trim)
+write.csv(caa_english, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/english_tweets.csv", fileEncoding = "UTF-8")
 
-train_index <- sample(1:nrow(caa_sample), 0.8 * nrow(caa_sample))
-test_index <- setdiff(1:nrow(caa_sample), train_index)
+write_excel_csv(caa_hindi, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/hindi_tweets.csv")
 
-caa_dfm_train <- caa_trim[train_index, ]
-caa_dfm_test <- caa_trim[test_index, ]
+write.csv(caa_hindi, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/hi_tweets.csv")
 
-caa_train_labels <- caa_sample[train_index, ]$CAA_stance
-caa_test_labels <- caa_sample[test_index, ]$CAA_stance
+s <- fread("/Users/shreyaagarwal/Google Drive/Dissertation/Data/hi_tweets.csv", header = TRUE)
 
-prop.table(table(caa_train_labels))
-prop.table(table(caa_test_labels))
+
 
 ```
 
-Step2: Applying the model
 ```{r}
-library(e1071)
-library("pryr")
-library(gmodels)
-
-devtools::install_github("krlmlr/ulimit")
-ulimit::memory_limit(2000)
-
-#build the classfier
-caa_classifier <- svm(caa_train_labels~. , data = caa_dfm_train,method="C-classification", kernal="radial", 
-          gamma=0.1, cost=10)
-
-caa_pred <- predict(caa_classifier, caa_dfm_test)
-
-require(caret)  # Load caret package
-
-ctrl <- trainControl(method = "cv", number = 7) # 10-fold CV
 
 
-set.seed(100)  
+Hinews_tweets <- caa_hindi %>% filter(str_detect(description, news_words)==TRUE) %>% distinct(text, .keep_all = TRUE)
 
-caa_classifier <- train(caa_dfm_train, caa_train_labels,
-                  method = "rpart", trControl = ctrl) # train random forest
+hicitizen_tweets <- caa_hindi %>% filter(!text %in% Hinews_tweets$text) %>% distinct(text, .keep_all = TRUE)
 
-rf.tfidf
+hindi_tweets <- rbind(Hinews_tweets, hicitizen_tweets)
 
-caa_dfm_train
+library(openxlsx)
+write.xlsx(hindi_tweets, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/hi_tweets1.xlsx")
 ```
 
+#Read english tweets and remove hashtags from it.
+```{r}
+eng_tweets <- read.csv("/Users/shreyaagarwal/Google Drive/Dissertation/Data/english_tweets123 copy.csv", header = TRUE)
+
+eng_tweets$text <- str_replace_all(eng_tweets$text, "AmitShahIstifaDo", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "SaveDelhiHindus", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "IndiaAgainstCAANRC", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "UNRejectsCAA", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "CAA UNRejectsCAA", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "DelhiRiots2020 AmitShahIstifaDo", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "UNRejectsCAA UNRejectsCAA", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "Tahirhussainterrorist", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "UNRejectsCAA", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "IndiaAgainstCAA", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "ArrestKapilMishra", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "SCSTOBCAgainstHate", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "हिंदुओकोमारनाबंदकरो", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "ArrestTahirHussain", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "DelhiRiots2020", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "DelhiBurning", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "DelhiBurning ArrestTerroristKapilMishra", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "AntiHinduRiot", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "AntiHinduRiots", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "UN", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "mosque DelhiBurning ArrestTerroristKapilMishra", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "ArrestTerroristKapilMishra", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "WhyBJPBurningDelhi", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "GenocideInDelhi", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "ArrestSwaraBhaskar", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "AmitShahResign", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "DelhiAgainstJehadiViolence", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "DelhiRiotTruth", "")
+eng_tweets$text <- str_replace_all(eng_tweets$text, "stopkillinghindus", "")
+
+write.csv(eng_tweets, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/english_tweets123 copy.csv", fileEncoding = "UTF-8")
+```
+
+#Read Hindi tweets and remove hashtags from it.
+```{r}
+Hindi_tweets <- read.xlsx("/Users/shreyaagarwal/Google Drive/Dissertation/Data/hi_tweets1.xlsx")
+```
 
 ```{r}
-CrossTable(caa_pred, caa_test_labels, prop.chisq = FALSE, chisq = FALSE, 
-           prop.t = FALSE,
-           dnn = c("Predicted", "Actual"))
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "AmitShahIstifaDo", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "SaveDelhiHindus", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "IndiaAgainstCAANRC", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "UNRejectsCAA", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "CAA UNRejectsCAA", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "DelhiRiots2020 AmitShahIstifaDo", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "UNRejectsCAA UNRejectsCAA", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "Tahirhussainterrorist", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "UNRejectsCAA", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "IndiaAgainstCAA", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "ArrestKapilMishra", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "SCSTOBCAgainstHate", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "हिंदुओकोमारनाबंदकरो", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "ArrestTahirHussain", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "DelhiRiots2020", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "DelhiBurning", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "DelhiBurning ArrestTerroristKapilMishra", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "AntiHinduRiot", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "AntiHinduRiots", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "UN", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "mosque DelhiBurning ArrestTerroristKapilMishra", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "ArrestTerroristKapilMishra", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "WhyBJPBurningDelhi", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "GenocideInDelhi", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "ArrestSwaraBhaskar", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "AmitShahResign", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "DelhiAgainstJehadiViolence", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "DelhiRiotTruth", "")
+hindi_tweets$text <- str_replace_all(hindi_tweets$text, "stopkillinghindus", "")
+
+```
+
+```{r}
+hindi_tweets$text <- gsub("<.*?>", "", hindi_tweets$text) #get rid of stuff within brackets
+hindi_tweets$text <- gsub("http[[:alnum:][:punct:]]*", "", hindi_tweets$text) #get rid of links and punctuation
+hindi_tweets$text <- str_replace_all(hindi_tweets$text,"#[a-z,A-Z]*","") #get rid of hashtags
+hindi_tweets$text <- str_replace_all(hindi_tweets$text,"@[a-z,A-Z]*","") #get rid of references of other screen names
+hindi_tweets$text = gsub("[[:punct:]]", "", hindi_tweets$text) #get rid of punctuation
+hindi_tweets$text = gsub("[[:digit:]]", "", hindi_tweets$text) #get rid of digits
+hindi_tweets$text <- str_replace_all(hindi_tweets$text," "," ") #get rid of unncessary space
+hindi_tweets$text <- trimws(hindi_tweets$text, "l")
+
+```
+
+```{r}
+write.csv(hindi_tweets,"/Users/shreyaagarwal/Google Drive/Dissertation/Data/hi_tweets1.csv")
 ```
 

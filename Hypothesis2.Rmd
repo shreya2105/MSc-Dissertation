@@ -1,0 +1,175 @@
+---
+title: "Hypothesis2"
+author: "SA"
+date: "7/18/2020"
+output: html_document
+---
+
+Hypothesis 2 - On Twitter, minority users create majority of the content. Most users do not engage in one-to-one conversation.
+
+```{r}
+library(data.table)
+library(stringr)
+```
+
+
+Clean the hashtags and links from the dataset
+```{r}
+
+udata <- fread("/Users/shreyaagarwal/Google Drive/Dissertation/Data/uniquedata.csv")
+
+udata$text <- as.character(udata$text)
+udata$text <- gsub("<.*?>", "", udata$text) #get rid of stuff within brackets
+udata$text <- gsub("http[[:alnum:][:punct:]]*", "", udata$text) #get rid of links and punctuation
+udata$text <- str_replace_all(udata$text,"#[a-z,A-Z]*","") #get rid of hashtags
+udata$text <- str_replace_all(udata$text,"@[a-z,A-Z]*","") #get rid of references of other screen names
+udata$text = gsub("[[:punct:]]", "", udata$text) #get rid of punctuation
+udata$text = gsub("[[:digit:]]", "", udata$text) #get rid of digits
+udata$text <- str_replace_all(udata$text," "," ") #get rid of unncessary space
+udata$text <- trimws(udata$text, "l")
+
+#openxlsx::write.xlsx(udata, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/uniquedata1.xlsx")
+```
+
+Users do not create original content in such tweets
+How many instances of a tweet are there?
+```{r}
+library(quanteda)
+
+#Read hindi stopwords file
+hi_stop <- readLines("/Users/shreyaagarwal/Google Drive/Dissertation/Data/final_stopwords.txt", encoding = "UTF-8")
+
+#Read hinglish stopwords file
+hiEng_stop <- readLines("/Users/shreyaagarwal/Google Drive/Dissertation/Data/hinglish_stopwords.txt")
+
+corpus_data <- corpus(udata$text, docvars = data.frame(date = udata$created_at1,
+                                                       lang = udata$lang,
+                                                       is_retweet = udata$is_retweet))
+
+sim_df <- corpus_data %>%
+  corpus_reshape(to = "sentences") %>%
+  dfm() %>%
+  textstat_simil(method = "cosine") %>%
+  as.data.frame()
+
+
+dfm_data <- dfm(corpus_data, remove = c(stopwords("en"), stopwords("hi", source = "stopwords-iso"), hi_stop, hiEng_stop, "amp"), remove_punct = TRUE) %>%
+    dfm_trim(min_termfreq = 20, verbose = FALSE)
+
+```
+
+#Original content or not
+```{r}
+table(udata$is_retweet)
+
+#Original content or not
+42879/301913 #14% of content is retweets - But is the content really original?
+32849/301913 #11% of content is a quote tweet.
+
+
+```
+
+
+```{r}
+
+#How many one to one interactions?
+
+replies <- udata %>% filter(grepl("^@",text)) 
+
+NROW(replies)/NROW(udata) #20% tweets were direct replies -- what's a direct reply and to whom
+
+#Users engaging in direct interaction formed 26% of all users.
+
+NROW(unique(replies$screen_name)) /NROW(unique(udata$screen_name))  #unique users
+
+NROW(replies$text)/NROW(udata$text) #Reply Tweets 20% of the dataset #Higher than the average studies
+
+#reply percentage in the user group
+
+follower <- as.data.table(table(replies$followers_count))
+
+replies$followers_count <- as.numeric(replies$followers_count)
+
+replies_s <- replies %>% distinct(screen_name, .keep_all = TRUE)
+
+follow <- replies %>% select("screen_name", "text", "followers_count") %>% group_by(screen_name, followers_count) %>% dplyr::summarise(totaltweets = n())
+
+table_users <- follow %>% mutate(numberoftweets = case_when(
+                                             followers_count >= 0 & followers_count <= 10 ~ '0 to 10',
+                                             followers_count > 10 & followers_count <= 50 ~ '11 to 50', 
+                                             followers_count > 50 & followers_count <= 100 ~ '51 to 100',
+                                             followers_count > 100 & followers_count <= 1000 ~ '101 to 1000',
+                                             followers_count > 1000 & followers_count <= 10000 ~ '1000 to 10000',
+                                             followers_count > 10000 ~ '>10000'))
+
+tabe_users1 <- table_users %>% group_by(numberoftweets) %>% dplyr::summarise(a_sum = sum(totaltweets))
+            
+tabe_users1 <- table_users %>% select("screen_name" , "numberoftweets", ) %>% group_by(numberoftweets) %>% dplyr::summarize(count = n())                                                                   
+                                                                      
+```
+
+```{r}
+library(tidyverse)
+text_d <- udata %>% select(text,is_retweet) %>% filter(is_retweet=="FALSE") %>% group_by(text) %>% summarize(n())
+
+write.csv(text_d, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/text.csv")
+```
+
+Measuring similarity between documents - to check if they are similar in terms - This is done in batches due to memory limitations.
+```{r}
+
+udata_not <- udata %>% filter(is_retweet != "TRUE")
+udata_not <- udata_not %>% distinct(text, .keep_all = TRUE)
+
+hi1 <- udata_not[210001:213593,]
+
+fullcorpus <- corpus (hi1$text, 
+                   docvars = data.frame(date1 = hi1$created_at1))
+                                        
+sim_df <- dfm(corpus_subset(fullcorpus), remove = c(stopwords("en"), stopwords("hi", source = "stopwords-iso"), hi_stop, hiEng_stop), remove_punct = TRUE) %>% 
+  textstat_simil(method = "cosine") %>%
+  as.data.frame() %>%
+  dplyr::filter(cosine >= .99)
+  
+table(sim_df$cosine)
+
+fullcorpus$duplicate <- docnames(fullcorpus) %in% sim_df$document2
+
+table(fullcorpus$duplicate)
+
+NROW(unique(sim_df$document2))
+
+# total number of near duplicates and duplicate tweets were 8739, but added a few tweets extra since similarity calculatiion was performed in batches due to memory issues.
+9000/301913
+
+```
+
+```{r}
+
+udata <- fread("/Users/shreyaagarwal/Google Drive/Dissertation/Data/uniquedata.csv")
+
+udata$text <- as.character(udata$text)
+udata$text <- gsub("<.*?>", "", udata$text) #get rid of stuff within brackets
+udata$text <- gsub("http[[:alnum:][:punct:]]*", "", udata$text) #get rid of links and punctuation
+udata$text <- str_replace_all(udata$text,"#[a-z,A-Z]*","") #get rid of hashtags
+udata$text <- str_replace_all(udata$text,"@[a-z,A-Z]*","") #get rid of references of other screen names
+udata$text = gsub("[[:punct:]]", "", udata$text) #get rid of punctuation
+udata$text = gsub("[[:digit:]]", "", udata$text) #get rid of digits
+udata$text <- str_replace_all(udata$text," "," ") #get rid of unncessary space
+udata$text <- trimws(udata$text, "l")
+udata$text <- gsub('\\p{So}|\\p{Cn}', '', udata$text, perl = TRUE)
+```
+
+```{r}
+u_rd <- udata_not %>% distinct(text, .keep_all = TRUE) 
+udata_not <- udata %>% filter(is_retweet != "TRUE")
+
+((NROW(udata) - NROW(udata_not)) + (NROW(udata) - NROW(u_rd)))/NROW(udata)
+
+#write.csv(u_rd, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/unique_text_rows.csv")
+
+(130888+47630)/NROW(udata)
+
+47630/301913 
+```
+

@@ -1,5 +1,5 @@
 ---
-title: "CP"
+title: "Step 2 - Collate all tweets and divide it into Hindi and English"
 author: "SA"
 date: "2/17/2020"
 output: html_document
@@ -33,6 +33,15 @@ write_excel_csv(data, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/allco
 ```
 
 
+```{r}
+complete_dataset <- fread("/Users/shreyaagarwal/Google Drive/Dissertation/Data/allcombineddata.csv")
+
+eng <- complete_dataset %>% filter(lang == "en")
+nrow(hi)/nrow(complete_dataset) - sum(nrow(eng), nrow(hi) )
+
+```
+
+
 Check for duplication in complete dataset (hindi/english tweets only) - 540,973
 ```{r}
 #Unique rows
@@ -46,6 +55,15 @@ data_unique_lang$created_at <- lubridate::as_date(data_unique_lang$created_at)
 #table(data_unique$lang)
 
 write_excel_csv(data_unique_lang, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/unique_rows_hi_eng.csv")
+```
+
+
+```{r}
+d_dataset <- fread("/Users/shreyaagarwal/Google Drive/Dissertation/Data/unique_rows_hi_eng.csv")
+
+hi_d <- d_dataset %>% filter(lang == "hi")
+nrow(hi_d)/623345 - sum(nrow(eng_d), nrow(hi_d) )
+
 ```
 
 Check for duplication in text columns - tweets - 231,910
@@ -63,214 +81,6 @@ table(data.text$created_at)
 
 write.csv(data.text, "/Users/shreyaagarwal/Google Drive/Dissertation/Data/unique_text_rows_hi_eng.csv")
 ```
-
-
-```{r}
-library(tidyverse)
-
-eng_tweets <- read.csv("/Users/shreyaagarwal/Documents/Code/Machine Learning/Dissertation/english_tweets.csv")
-hindi_tweets <- read.csv("/Users/shreyaagarwal/Documents/Code/Machine Learning/Dissertation/hindi_tweets.csv")
-
-religion_tweets <- eng_tweets %>% select("text") %>% filter(str_detect(text,"religion"))
-muslim_tweets <- eng_tweets %>% select("text") %>% filter(str_detect(text,"muslim"))
-nationalism_tweets <- eng_tweets %>% select("text") %>%  filter(str_detect(text,"nationalism"))
-patriot_tweets <- eng_tweets %>% select("text") %>%  filter(str_detect(text,"patriotism"))
-indiantweets <- eng_tweets %>% select("text") %>%  filter(str_detect(text,"indian"))
-hindutweets <- eng_tweets %>% select("text") %>%  filter(str_detect(text,"hindu"))
-
-```
-
-#Tweets containing the word muslim
-```{r}
-#*************************************************************************************************************************************************
-library(ggplot2)
-library(scales)
-library(lubridate)
-
-#tweets with "Muslim, islam, Jihad" in hindi and english
-muslim_tweets_all <- data.text %>% select("created_at","text") %>% filter(str_detect(text,"मुस्लिम|मुसलमान|Muslim|Islam|इस्लाम"))
-muslim_tweets_all <- muslim_tweets_all %>% mutate(count = str_count(text,"मुस्लिम|मुसलमान|Muslim|Islam|इस्लाम"))
-
-count_muslim <- muslim_tweets_all %>% select("created_at", "count")
-
-count_muslim_ta <- as.data.frame(table(count_muslim$created_at))
-
-ggplot(count_muslim_ta, aes(x = as_date(Var1), y = Freq)) +
-   geom_point(stat="identity")+
-   xlab("Date") +
-   scale_x_date(labels = date_format("%m/%d")) +
-   theme_classic() 
-
-
-
-#*************************************************************************************************************************************************
-
-```
-
-```{r}
-library (tidyverse)
-hindu_tweets_all <- data.text %>% select("created_at","text") %>% filter(str_detect(text,"hindus|hindu|हिंदू|हिन्दू"))
-
-hindu_tweets_all <- hindu_tweets_all %>% mutate(count = str_count(text,"hindus|hindu|हिंदू|हिन्दू"))
-
-```
-
-```{r}
-religion_tweets_all <- data.text %>% select("created_at","text") %>% filter(str_detect(text,"religion|dharma|धर्म"))
-
-religion_tweets_all <- religion_tweets_all %>% mutate(count = str_count(text,"religion|dharma|धर्म"))
-
-```
-
-
-#Presence of word "secular", "sickular"
-```{r}
-secular_tweets_all <- data.text %>% select("created_at","text") %>% filter(str_detect(text,"secular|secularism|सेक्युलर"))
-sickular_tweets_all <- data.text %>% select("created_at","text") %>% filter(str_detect(text,"sickular|sikular|सिकुलर"))
-```
-
-#Tweet distribution plots
-```{r}
-
-library(lubridate)
-
-data.text$created_at <- lubridate::as_date(data.text$created_at)
-eng_tweets$created_at <- lubridate::as_date(eng_tweets$created_at)
-hindi_tweets$created_at <- lubridate::as_date(hindi_tweets$created_at)
-
-# tweet frequency date wise
-tweet_all <- as.data.frame(table(data.text$created_at))
-tweet_dist <- as.data.frame(table(hindi_tweets$created_at))
-tweet_dist_eng <- as.data.frame(table(eng_tweets$created_at))
-
-barplot(tweet_dist$Freq,
-main = "Hindi tweet distribution",
-xlab = "Dates",
-ylab = "tweets",
-col = "grey")
-
-barplot(tweet_dist_eng$Freq,
-main = "English tweet distribution",
-xlab = "Dates",
-ylab = "tweets",
-col = "darkred")
-
-barplot(tweet_all$Freq,
-main = "Total tweets distribution",
-xlab = "Dates",
-ylab = "tweets",
-col = "darkred")
-
-tweet_all$Var1 <- lubridate::as_date(tweet_all$Var1)
-tweet_dist$Var1 <- lubridate::as_date(tweet_dist$Var1)
-tweet_dist_eng$Var1 <- lubridate::as_date(tweet_dist_eng$Var1)
-
-#tweet frequency
-ggplot(tweet_all, aes(y = Freq, x = Var1)) +
-   geom_bar(stat="identity")+
-   xlab("Date") +
-   scale_x_date(labels = date_format("%m/%d")) +
-   theme_classic() 
-
-#Hindi Tweets
-ggplot(tweet_dist, aes(y = Freq, x = Var1)) +
-   geom_bar(stat="identity")+
-   xlab("Date") +
-   scale_x_date(labels = date_format("%m/%d")) +
-   theme_classic() 
-
-#English Tweets
-ggplot(tweet_dist_eng, aes(y = Freq, x = Var1)) +
-   geom_bar(stat="identity")+
-   xlab("Date") +
-   scale_x_date(labels = date_format("%m/%d")) +
-   theme_classic() 
-
-```
-
-
-```{r}
-install.packages("quanteda")
-library(quanteda)
-
-
-
-toks_tweets <- tokens(data.text$text, remove_punct = TRUE) 
-dfmat_tweets <- dfm(toks_tweets, select = "#*")
-tstat_freq <- textstat_frequency(dfmat_tweets, n = 5, groups = "lang")
-head(tstat_freq, 20)
-```
-
-
-
-
-
-
-
-```{r}
-
-head(hindi_tweets$text)
-
-hindi_tweets[which.max(hindi_tweets$favorite_count),] # Tweet that has the highest favourite count
-
-eng_tweets[which.max(eng_tweets$favorite_count),]
-
-length(unique(hindi_tweets$location)) #number of locations from where users have tweeted
-
-
-
-#table(hindi_tweets$location)
-
-hindi_tweets[1:20,] %>%
-  ggplot(aes(location)) +
-  geom_bar() + coord_flip() +
-      labs(x = "Count",
-      y = "Location",
-      title = "Twitter users - unique locations ")
-
-
-hindi_tweets %>%
-  count(location, sort = TRUE) %>%
-  mutate(location = reorder(location, n)) %>%
-  top_n(20) %>%
-  ggplot(aes(x = location, y = n)) +
-  geom_col() +
-  coord_flip() +
-      labs(x = "Count",
-      y = "Location",
-      title = "Where Twitter users are from - unique locations ")
-
-which.max(table(data.text$hashtags)) #trending hashtag is ShaheenBagh so far
-
-
-eng_tweets %>%
-  count(location, sort = TRUE) %>%
-  mutate(location = reorder(location, n)) %>%
-  top_n(20) %>%
-  ggplot(aes(x = location, y = n)) +
-  geom_col() +
-  coord_flip() +
-      labs(x = "Count",
-      y = "Location",
-      title = "Where Twitter users are from - unique locations ")
-
-na_count <-sapply(data.text, function(y) sum(length(which(is.na(y)))))
-na_count <- data.frame(na_count)
-
-gc <- data.text %>% filter(location !="NA")
-
-gc$geo_coords
-
-data.text$text
-unique(eng_tweets$text)
-
-```
-
-
-
-
-
-
 
 
 
